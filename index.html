@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Snake Game </title>
+  <style>
+    body {
+      background: #1a1a1a; /* Matching Dark Mode theme from prompt */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: #eee;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+    }
+
+    #score {
+      margin-bottom: 10px;
+      font-size: 18px;
+    }
+
+    canvas {
+      background: #111;
+      border: 4px solid #4CAF50;
+      border-radius: 8px;
+    }
+
+    #info {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #aaa;
+    }
+
+    #gameover {
+      margin-top: 10px;
+      font-size: 20px;
+      color: #ff5252;
+      display: none;
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 8px 16px;
+      font-size: 14px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>🐍 Snake</h1>
+  <div id="score">Score: 0</div>
+  <canvas id="gameCanvas" width="400" height="400"></canvas>
+  <div id="gameover">Game over! Druk op Opnieuw of spatie.</div>
+  <button id="resetBtn">Opnieuw</button>
+  <div id="info">Besturing: pijltjestoetsen of WASD</div>
+
+  <script>
+    /**
+     * Point Class
+     * Attributes: x, y
+     */
+    class Point {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+      }
+
+      equals(other) {
+        return other && this.x === other.x && this.y === other.y;
+      }
+    }
+
+    /**
+     * Board Class
+     * Attributes: width, height
+     */
+    class Board {
+      constructor(width, height) {
+        this.width = width;
+        this.height = height;
+      }
+
+      isValidPosition(p) {
+        return p.x >= 0 && p.x < this.width && p.y >= 0 && p.y < this.height;
+      }
+
+      getRandomEmpty(snake) {
+        let p;
+        let occupied = true;
+        while (occupied) {
+          p = new Point(
+            Math.floor(Math.random() * this.width),
+            Math.floor(Math.random() * this.height)
+          );
+          occupied = snake.body.some(segment => segment.equals(p));
+        }
+        return p;
+      }
+    }
+
+    /**
+     * Food Class
+     * Attributes: position, points
+     */
+    class Food {
+      constructor() {
+        this.position = new Point(0, 0);
+        this.points = 1;
+      }
+
+      respawn(board, snake) {
+        this.position = board.getRandomEmpty(snake);
+      }
+
+      getPosition() {
+        return this.position;
+      }
+    }
+
+    /**
+     * Snake Class
+     * Attributes: body, direction, growPending
+     */
+    class Snake {
+      constructor() {
+        this.body = [
+          new Point(8, 10),
+          new Point(7, 10),
+          new Point(6, 10)
+        ];
+        this.direction = 'RIGHT';
+        this.growPending = false;
+      }
+
+      move() {
+        const head = this.body[0];
+        let newX = head.x;
+        let newY = head.y;
+
+        if (this.direction === 'UP') newY--;
+        if (this.direction === 'DOWN') newY++;
+        if (this.direction === 'LEFT') newX--;
+        if (this.direction === 'RIGHT') newX++;
+
+        const newHead = new Point(newX, newY);
+        this.body.unshift(newHead);
+
+        if (!this.growPending) {
+          this.body.pop();
+        } else {
+          this.growPending = false;
+        }
+      }
+
+      changeDirection(d) {
+        const opposites = {
+          'UP': 'DOWN',
+          'DOWN': 'UP',
+          'LEFT': 'RIGHT',
+          'RIGHT': 'LEFT'
+        };
+        if (d !== opposites[this.direction]) {
+          this.direction = d;
+        }
+      }
+
+      grow() {
+        this.growPending = true;
+      }
+
+      checkSelfCollision() {
+        const head = this.body[0];
+        for (let i = 1; i < this.body.length; i++) {
+          if (head.equals(this.body[i])) {
+            return true;
+          }
+        }
+        return false;
+      }
+    }
+
+    /**
+     * Game Class
+     * Attributes: score, isGameOver, board, snake, food
+     */
+    class Game {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.boxSize = 20;
+        
+        this.board = new Board(
+          this.canvas.width / this.boxSize,
+          this.canvas.height / this.boxSize
+        );
+        
+        this.start();
+      }
+
+      start() {
+        this.score = 0;
+        this.isGameOver = false;
+        this.snake = new Snake();
+        this.food = new Food();
+        this.food.respawn(this.board, this.snake);
+        
+        document.getElementById('score').textContent = 'Score: 0';
+        document.getElementById('gameover').style.display = 'none';
+        
+        if (this.interval) clearInterval(this.interval);
+        this.interval = setInterval(() => this.update(), 110);
+      }
+
+      update() {
+        if (this.isGameOver) return;
+
+        this.snake.move();
+
+        if (this.checkCollision()) {
+          this.isGameOver = true;
+          clearInterval(this.interval);
+          document.getElementById('gameover').style.display = 'block';
+          return;
+        }
+
+        if (this.snake.body[0].equals(this.food.getPosition())) {
+          this.score += this.food.points;
+          document.getElementById('score').textContent = 'Score: ' + this.score;
+          this.snake.grow();
+          this.food.respawn(this.board, this.snake);
+        }
+
+        this.draw();
+      }
+
+      checkCollision() {
+        const head = this.snake.body[0];
+        // Wall collision
+        if (!this.board.isValidPosition(head)) {
+          return true;
+        }
+        // Self collision
+        if (this.snake.checkSelfCollision()) {
+          return true;
+        }
+        return false;
+      }
+
+      draw() {
+        // Clear board
+        this.ctx.fillStyle = '#111';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw food
+        const foodPos = this.food.getPosition();
+        this.ctx.fillStyle = '#ff5252';
+        this.ctx.fillRect(
+          foodPos.x * this.boxSize, 
+          foodPos.y * this.boxSize, 
+          this.boxSize - 2, 
+          this.boxSize - 2
+        );
+
+        // Draw snake
+        this.snake.body.forEach((segment, index) => {
+          this.ctx.fillStyle = index === 0 ? '#81C784' : '#4CAF50';
+          this.ctx.fillRect(
+            segment.x * this.boxSize, 
+            segment.y * this.boxSize, 
+            this.boxSize - 2, 
+            this.boxSize - 2
+          );
+        });
+      }
+    }
+
+    // Initialize the game
+    const game = new Game('gameCanvas');
+
+    // Input Handling
+    document.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      if (key === 'arrowup' || key === 'w') game.snake.changeDirection('UP');
+      else if (key === 'arrowdown' || key === 's') game.snake.changeDirection('DOWN');
+      else if (key === 'arrowleft' || key === 'a') game.snake.changeDirection('LEFT');
+      else if (key === 'arrowright' || key === 'd') game.snake.changeDirection('RIGHT');
+      else if (key === ' ' && game.isGameOver) game.start();
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      game.start();
+    });
+
+  </script>
+</body>
+
+</html>
